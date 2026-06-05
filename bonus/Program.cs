@@ -100,9 +100,9 @@ AIAgent agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
     {
         Instructions = systemPrompt,
         Tools = [
-            AIFunctionFactory.Create(GetWeather),
-            AIFunctionFactory.Create(Calculator),
-            AIFunctionFactory.Create(GetCurrentTime)
+            AIFunctionFactory.Create(GetWeather,      name: "get_weather"),
+            AIFunctionFactory.Create(Calculator,      name: "calculator"),
+            AIFunctionFactory.Create(GetCurrentTime,  name: "get_current_time")
         ],
         ResponseFormat = ChatResponseFormat.Json
     }
@@ -126,8 +126,12 @@ try
 
     Console.WriteLine();
     Console.WriteLine("=== Parsed structured response ===");
+
+    // Some models (Claude, Llama) like to wrap JSON in markdown ```json ... ``` fences
+    // even when told not to. Strip them defensively before parsing.
+    var json = ExtractJson(response.Text!);
     var parsed = JsonSerializer.Deserialize<AgentResponse>(
-        response.Text!,
+        json,
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
     Console.WriteLine(JsonSerializer.Serialize(parsed, new JsonSerializerOptions
@@ -145,7 +149,24 @@ catch (Exception ex)
     return 1;
 }
 
-// --- 6. Response schema ----------------------------------------------------
+// --- 6. Helpers ------------------------------------------------------------
+
+static string ExtractJson(string text)
+{
+    text = text.Trim();
+    if (text.StartsWith("```"))
+    {
+        // strip the opening fence line, e.g. ```json
+        var firstNewline = text.IndexOf('\n');
+        if (firstNewline > 0) text = text[(firstNewline + 1)..];
+        // strip the closing fence
+        if (text.EndsWith("```")) text = text[..^3];
+        text = text.Trim();
+    }
+    return text;
+}
+
+// --- 7. Response schema ----------------------------------------------------
 // Same shape as Task 1's AgentResponse — kept in this file for simplicity.
 
 internal sealed class AgentResponse
